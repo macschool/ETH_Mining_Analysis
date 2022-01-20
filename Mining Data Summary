@@ -1,0 +1,92 @@
+
+==========================================================
+=================   ethermine api code   =================
+==========================================================
+
+import requests
+import pandas as pd
+import datetime as dt
+import json
+from os import times
+import pyupbit
+import pandas as pd
+from pandas import Series, DataFrame
+import time
+
+r = requests.get('https://api.ethermine.org/miner/:77bC57424d9046B98b6829B7093343dA2e3e2cCB/rounds')
+ticket = r.json()
+
+profitability_log = {
+    'block': [],
+    'amount': [],
+    'Unixtimestamp' : [],
+    'Kdatetime' : []
+}
+
+now_cycle_time = datetime.datetime.now().strftime('%y-%m-%d_%H-%M')
+to = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+
+for t in ticket['data'][0:5]:
+    ethscan_block_info = requests.get('https://api.etherscan.io/api?module=block&action=getblockreward&blockno='+str(t["block"])+'&apikey=G967GQN6EMACAGHJ62YJNS76EX6KCCRF7S')
+    ethscan_block_info_json = ethscan_block_info.json()
+    profitability_log['block'].append(t['block'])
+    profitability_log['amount'].append(t['amount']/1000000000000000000)
+    profitability_log['Unixtimestamp'].append(ethscan_block_info_json["result"]["timeStamp"])
+    profitability_log['Kdatetime'].append(datetime.datetime.fromtimestamp(int(ethscan_block_info_json["result"]["timeStamp"])))
+
+type(profitability_log)
+df_profitability = pd.DataFrame.from_dict(profitability_log)
+df_profitability 
+
+df_ethscan_block_Hour = df_profitability.resample(on ='Kdatetime', rule='H').sum()
+type(df_ethscan_block_Hour)
+df_ethscan_block_Hour 
+df_ethscan_block_Hour['Kdatetime'] = df_ethscan_block_Hour.index
+df_ethscan_block_Hour
+
+df_ethscan_block_Hour.reset_index(drop=True, inplace = True)
+df_ethscan_block_Hour_amount = df_ethscan_block_Hour[['Kdatetime', 'amount']]
+df_ethscan_block_Hour_amount 
+
+
+==============================================================
+===============   업비트 가격 데이터 가져오기   ================
+==============================================================
+
+ticker = 'KRW-ETH'
+interval = 'minute60'
+count = 7*24
+count 
+ETH_price_df = pyupbit.get_ohlcv(ticker=ticker, interval=interval, to=to, count=count)
+ETH_price_df["Price_Avr"] = ETH_price_df["value"]/ETH_price_df["volume"]
+ETH_price_df['Kdatetime'] = ETH_price_df.index
+ETH_price_df
+df_price = ETH_price_df[['Kdatetime', 'Price_Avr']]
+df_price
+
+-------------------------------------------------------------
+---------------     업비트 가격 Merge 하기     ---------------
+-------------------------------------------------------------
+   
+
+df_amount = df_ethscan_block_Hour_amount 
+df_amount
+df_price
+
+type(df_amount)
+type(df_price)
+
+df_amount.columns
+df_price.columns
+
+df_mer = pd.merge(df_amount, df_price)
+df_mer
+
+df_mer['Profit'] = df_mer['amount']*df_mer['Price_Avr']
+df_mer['Date'] = df_mer['Kdatetime'].dt.strftime('%Y-%m-%d')
+df_mer['Hour'] = df_mer['Kdatetime'].dt.strftime('%H')
+df_mer['Range'] = round(df_mer['amount']/df_mer['amount'].mean()*100,2)-100
+df_mer.columns
+df_mer_1 = df_mer[['Date', 'Hour', 'amount', 'Price_Avr', 'Profit', 'Range']]
+
+df_mer_1.to_excel(r"D:/해시클라우드 분석/Tracker_Hour_1.xlsx")
